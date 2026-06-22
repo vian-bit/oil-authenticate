@@ -14,6 +14,14 @@ import {
   clusterApiUrl,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
+import { Buffer } from "buffer";
+
+// Ensure Buffer is available globally for @solana/web3.js in browser bundles.
+if (typeof window !== "undefined" && !(window as any).Buffer) {
+  (window as any).Buffer = Buffer;
+}
+
+
 
 export const SOLANA_CLUSTER = "devnet" as const;
 export const SOLANA_NETWORK_LABEL = "Solana Devnet";
