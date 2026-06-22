@@ -58,7 +58,7 @@ export default function ProductDetail() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field k="Batch" v={product.batch} />
                   <Field k="Tanggal produksi" v={new Date(product.producedAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} />
-                  <Field k="Jaringan" v={getNetwork()} />
+                  <Field k="Jaringan" v={SOLANA_NETWORK_LABEL} />
                   <Field k="Terdaftar" v={new Date(product.registeredAt).toLocaleString("id-ID")} />
                   <div className="sm:col-span-2">
                     <div className="text-xs text-muted-foreground">Hash on-chain</div>
