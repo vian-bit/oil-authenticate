@@ -1,23 +1,23 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Camera, KeyRound, Loader2, Sparkles } from "lucide-react";
+import { CheckCircle2, KeyRound, Sparkles } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import QRScanner from "@/components/QRScanner";
+import { ChainBadges } from "@/components/ChainBadges";
 import { listProducts } from "@/lib/blockchain";
+import { toast } from "sonner";
 
 export default function Scan() {
   const [params] = useSearchParams();
   const [code, setCode] = useState("");
-  const [scanning, setScanning] = useState(false);
   const nav = useNavigate();
 
   useEffect(() => {
     const c = params.get("code");
-    if (c) {
-      nav(`/verify/${encodeURIComponent(c)}`, { replace: true });
-    }
+    if (c) nav(`/verify/${encodeURIComponent(c)}`, { replace: true });
   }, [params, nav]);
 
   function submit(c: string) {
@@ -26,61 +26,42 @@ export default function Scan() {
     nav(`/verify/${encodeURIComponent(v)}`);
   }
 
+  function handleScanResult(text: string) {
+    // Accept either a raw OG-XXXX-XXXX code or a /verify/<code> URL
+    let parsed = text.trim();
+    const match = parsed.match(/(OG-[A-Z0-9]{4}-[A-Z0-9]{4})/i);
+    if (match) parsed = match[1].toUpperCase();
+    toast.success("QR ditemukan", { description: parsed, icon: <CheckCircle2 className="h-4 w-4" /> });
+    submit(parsed);
+  }
+
   function simulateScan() {
-    setScanning(true);
-    setTimeout(() => {
-      const items = listProducts();
-      // pilih yang masih active jika ada, kalau tidak random
-      const target = items.find((p) => p.status === "active") ?? items[0];
-      setScanning(false);
-      if (!target) {
-        // simulasi unknown
-        submit("OG-FAKE-0000");
-      } else {
-        submit(target.code);
-      }
-    }, 1400);
+    const items = listProducts();
+    const target = items.find((p) => p.status === "active") ?? items[0];
+    if (!target) submit("OG-FAKE-0000");
+    else {
+      toast.success("QR ditemukan (simulasi)", { description: target.code });
+      submit(target.code);
+    }
   }
 
   return (
     <Layout>
       <div className="mx-auto max-w-2xl">
-        <h1 className="text-3xl font-bold tracking-tight">Verifikasi Produk</h1>
+        <ChainBadges />
+        <h1 className="mt-3 text-3xl font-bold tracking-tight">Verifikasi Produk</h1>
         <p className="mt-2 text-muted-foreground">
-          Scan QR pada kemasan oli, atau masukkan kode unik secara manual.
+          Scan QR pada kemasan oli menggunakan kamera, atau masukkan kode unik secara manual.
         </p>
 
         <div className="mt-8 rounded-2xl border border-border bg-card p-6">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Camera className="h-4 w-4 text-primary" /> Pemindai kamera
+          <div className="mb-4 flex items-center justify-between">
+            <span className="text-sm font-semibold">Pemindai kamera</span>
+            <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold">Realtime</span>
           </div>
-
-          <div className="relative mt-4 aspect-square overflow-hidden rounded-xl border-2 border-dashed border-border bg-secondary">
-            <div className="absolute inset-0 flex items-center justify-center">
-              {scanning ? (
-                <div className="flex flex-col items-center gap-3 text-center">
-                  <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                  <div className="text-sm font-medium">Membaca QR & memanggil smart contract…</div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-3 text-center px-6">
-                  <Camera className="h-12 w-12 text-muted-foreground" />
-                  <div className="text-sm text-muted-foreground">
-                    Kamera tidak tersedia di prototype. Gunakan tombol simulasi di bawah.
-                  </div>
-                </div>
-              )}
-            </div>
-            {/* corner frames */}
-            <Corner pos="top-3 left-3" rot="border-l-4 border-t-4" />
-            <Corner pos="top-3 right-3" rot="border-r-4 border-t-4" />
-            <Corner pos="bottom-3 left-3" rot="border-l-4 border-b-4" />
-            <Corner pos="bottom-3 right-3" rot="border-r-4 border-b-4" />
-          </div>
-
-          <Button onClick={simulateScan} disabled={scanning} className="mt-4 h-11 w-full">
-            <Sparkles className="mr-2 h-4 w-4" />
-            {scanning ? "Memproses…" : "Simulasikan Scan QR"}
+          <QRScanner onResult={handleScanResult} />
+          <Button onClick={simulateScan} variant="ghost" className="mt-3 w-full">
+            <Sparkles className="mr-2 h-4 w-4" /> Atau gunakan simulasi (tanpa kamera)
           </Button>
         </div>
 
@@ -89,10 +70,7 @@ export default function Scan() {
             <KeyRound className="h-4 w-4 text-primary" /> Input kode manual
           </div>
           <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              submit(code);
-            }}
+            onSubmit={(e) => { e.preventDefault(); submit(code); }}
             className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]"
           >
             <div>
@@ -114,8 +92,4 @@ export default function Scan() {
       </div>
     </Layout>
   );
-}
-
-function Corner({ pos, rot }: { pos: string; rot: string }) {
-  return <div className={`absolute ${pos} h-8 w-8 ${rot} rounded-md border-primary`} />;
 }

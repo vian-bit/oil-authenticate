@@ -1,17 +1,30 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { CheckCircle2, AlertTriangle, XCircle, ArrowLeft, Loader2 } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, ArrowLeft, Loader2, History } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { verifyProduct, type VerifyResult, getNetwork } from "@/lib/blockchain";
+import { ChainBadges, shortHash } from "@/components/ChainBadges";
+import {
+  verifyProduct, type VerifyResult, getNetwork, getProductHistory, type BlockchainTx,
+} from "@/lib/blockchain";
 
 export default function Verify() {
   const { code = "" } = useParams();
   const [result, setResult] = useState<VerifyResult | null>(null);
+  const [history, setHistory] = useState<BlockchainTx[]>([]);
+  const [stage, setStage] = useState<"wallet" | "pending" | "done">("wallet");
 
   useEffect(() => {
     setResult(null);
-    verifyProduct(decodeURIComponent(code)).then(setResult);
+    setStage("wallet");
+    const t1 = setTimeout(() => setStage("pending"), 500);
+    verifyProduct(decodeURIComponent(code)).then((r) => {
+      setResult(r);
+      setStage("done");
+      const c = r.kind === "not_found" ? r.code : r.product.code;
+      setHistory(getProductHistory(c));
+    });
+    return () => clearTimeout(t1);
   }, [code]);
 
   return (
@@ -20,14 +33,23 @@ export default function Verify() {
         <Button asChild variant="ghost" size="sm" className="mb-4 -ml-2">
           <Link to="/scan"><ArrowLeft className="mr-1 h-4 w-4" /> Kembali</Link>
         </Button>
+        <ChainBadges className="mb-4" />
 
         {!result ? (
-          <div className="flex h-72 flex-col items-center justify-center rounded-2xl border border-border bg-card">
+          <div className="flex h-72 flex-col items-center justify-center rounded-2xl border border-border bg-card text-center px-6">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <p className="mt-3 text-sm text-muted-foreground">Memverifikasi di blockchain…</p>
+            <p className="mt-3 text-sm font-semibold">
+              {stage === "wallet" ? "Waiting for wallet confirmation…" : "Memverifikasi di blockchain…"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Memanggil <code className="rounded bg-secondary px-1">verifyProduct()</code> di {getNetwork()}
+            </p>
           </div>
         ) : (
-          <ResultView result={result} />
+          <>
+            <ResultView result={result} />
+            <HistoryTimeline history={history} />
+          </>
         )}
       </div>
     </Layout>
@@ -41,8 +63,8 @@ function ResultView({ result }: { result: VerifyResult }) {
         tone="success"
         icon={CheckCircle2}
         title="ASLI"
-        subtitle="Produk terdaftar dan baru pertama kali diverifikasi."
-        product={result.product}
+        subtitle="Produk terdaftar di blockchain. Belum pernah diverifikasi sebelumnya."
+        result={result}
       />
     );
   }
@@ -51,9 +73,9 @@ function ResultView({ result }: { result: VerifyResult }) {
       <Banner
         tone="warning"
         icon={AlertTriangle}
-        title="SUDAH PERNAH DIGUNAKAN"
-        subtitle="QR ini telah discan sebelumnya. Waspada — bisa jadi indikasi pemalsuan."
-        product={result.product}
+        title="PERNAH DIVERIFIKASI"
+        subtitle={`Produk sudah pernah discan sebelumnya (${result.previousVerifications}× verifikasi). Waspada terhadap kemungkinan pemalsuan.`}
+        result={result}
       />
     );
   }
@@ -61,8 +83,9 @@ function ResultView({ result }: { result: VerifyResult }) {
     <Banner
       tone="danger"
       icon={XCircle}
-      title="TIDAK DITEMUKAN"
-      subtitle={`Kode "${result.code}" tidak terdaftar di smart contract OilGuard. Hindari produk ini.`}
+      title="TIDAK TERDAFTAR"
+      subtitle={`Kode "${result.code}" tidak ditemukan di blockchain. Hindari produk ini.`}
+      result={result}
     />
   );
 }
@@ -70,23 +93,18 @@ function ResultView({ result }: { result: VerifyResult }) {
 type Tone = "success" | "warning" | "danger";
 
 function Banner({
-  tone,
-  icon: Icon,
-  title,
-  subtitle,
-  product,
+  tone, icon: Icon, title, subtitle, result,
 }: {
-  tone: Tone;
-  icon: any;
-  title: string;
-  subtitle: string;
-  product?: import("@/lib/blockchain").Product;
+  tone: Tone; icon: any; title: string; subtitle: string; result: VerifyResult;
 }) {
   const toneClass = {
     success: "bg-success text-success-foreground",
     warning: "bg-warning text-warning-foreground",
     danger: "bg-danger text-danger-foreground",
   }[tone];
+
+  const product = result.kind !== "not_found" ? result.product : undefined;
+  const tx = result.tx;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -108,27 +126,26 @@ function Banner({
           <Field k="Batch" v={product.batch} />
           <Field k="Tanggal produksi" v={new Date(product.producedAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} />
           <Field k="Jaringan" v={getNetwork()} />
-          <Field k="Diverifikasi" v={product.verifiedAt ? new Date(product.verifiedAt).toLocaleString("id-ID") : "-"} />
+          <Field k="Block #" v={<span className="font-mono">{tx.blockNumber.toLocaleString()}</span>} />
           <div className="sm:col-span-2">
             <div className="text-xs text-muted-foreground">Hash on-chain</div>
-            <div className="mt-1 break-all rounded-lg bg-secondary p-3 font-mono text-[11px] leading-relaxed">
-              {product.hash}
-            </div>
+            <div className="mt-1 break-all rounded-lg bg-secondary p-3 font-mono text-[11px] leading-relaxed">{product.hash}</div>
           </div>
-          {product.txVerify && (
-            <div className="sm:col-span-2">
-              <div className="text-xs text-muted-foreground">Tx verifikasi</div>
-              <div className="mt-1 break-all rounded-lg bg-secondary p-3 font-mono text-[11px] leading-relaxed">
-                {product.txVerify}
-              </div>
-            </div>
-          )}
+          <div className="sm:col-span-2">
+            <div className="text-xs text-muted-foreground">Tx verifikasi (baru)</div>
+            <div className="mt-1 break-all rounded-lg bg-secondary p-3 font-mono text-[11px] leading-relaxed">{tx.txHash}</div>
+          </div>
         </div>
       )}
 
       <div className="flex flex-wrap gap-3 border-t border-border bg-muted/40 p-6">
         <Button asChild><Link to="/scan">Scan produk lain</Link></Button>
-        <Button asChild variant="secondary"><Link to="/">Ke beranda</Link></Button>
+        {product && (
+          <Button asChild variant="secondary">
+            <Link to={`/product/${encodeURIComponent(product.code)}`}>Detail produk</Link>
+          </Button>
+        )}
+        <Button asChild variant="ghost"><Link to="/explorer">Lihat Explorer</Link></Button>
       </div>
     </div>
   );
@@ -139,6 +156,38 @@ function Field({ k, v }: { k: string; v: React.ReactNode }) {
     <div>
       <div className="text-xs text-muted-foreground">{k}</div>
       <div className="mt-0.5 font-medium">{v}</div>
+    </div>
+  );
+}
+
+function HistoryTimeline({ history }: { history: BlockchainTx[] }) {
+  if (history.length === 0) return null;
+  return (
+    <div className="mt-6 rounded-2xl border border-border bg-card p-6">
+      <div className="flex items-center gap-2 text-sm font-bold">
+        <History className="h-4 w-4 text-primary" /> Riwayat Aktivitas
+      </div>
+      <ol className="mt-5 space-y-4 border-l-2 border-border pl-5">
+        {history.map((t, i) => {
+          const isReg = t.txType === "REGISTER";
+          const label = isReg
+            ? "Produk didaftarkan"
+            : i === 1 || (!isReg && history.filter((h) => h.txType === "VERIFY").indexOf(t) === 0)
+              ? "Diverifikasi pertama kali"
+              : "Diverifikasi kembali";
+          return (
+            <li key={t.txHash} className="relative">
+              <span className={`absolute -left-[27px] top-1 h-4 w-4 rounded-full border-2 border-background ${isReg ? "bg-primary" : "bg-success"}`} />
+              <div className="text-sm font-semibold">✓ {label}</div>
+              <div className="mt-1 grid grid-cols-1 gap-1 text-xs text-muted-foreground sm:grid-cols-3">
+                <div>TX: <span className="font-mono text-foreground">{shortHash(t.txHash, 8, 4)}</span></div>
+                <div>Block: <span className="font-mono text-foreground">#{t.blockNumber.toLocaleString()}</span></div>
+                <div>{new Date(t.timestamp).toLocaleString("id-ID")}</div>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }

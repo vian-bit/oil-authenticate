@@ -1,11 +1,12 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { Droplet, ShieldCheck, ScanLine, LayoutDashboard } from "lucide-react";
+import { Droplet, ShieldCheck, ScanLine, LayoutDashboard, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getNetwork } from "@/lib/blockchain";
 
 const nav = [
   { to: "/", label: "Beranda", icon: ShieldCheck },
   { to: "/scan", label: "Scan", icon: ScanLine },
+  { to: "/explorer", label: "Explorer", icon: Activity },
   { to: "/admin", label: "Admin", icon: LayoutDashboard },
 ];
 
@@ -61,7 +62,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </footer>
 
       {/* Mobile bottom nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-border bg-card md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-border bg-card md:hidden">
         {nav.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
