@@ -15,6 +15,8 @@ import {
   generateCode, listProducts, registerProduct, getStats, seedDemoData,
   encodePayload, type Product,
 } from "@/lib/blockchain";
+import { useSolanaSigner } from "@/hooks/use-solana-signer";
+import { explorerTxUrl } from "@/lib/solana";
 import { toast } from "@/hooks/use-toast";
 
 export default function Admin() {
@@ -145,21 +147,35 @@ function RegisterDialog({ onClose, onCreated }: { onClose: () => void; onCreated
   const [producedAt, setProducedAt] = useState(new Date().toISOString().slice(0, 10));
   const [code, setCode] = useState(generateCode());
   const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState<"idle" | "wallet" | "confirming">("idle");
+  const signer = useSolanaSigner();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!name || !batch) return;
     setLoading(true);
+    setStage(signer ? "wallet" : "confirming");
     try {
-      const { product, tx } = await registerProduct({ name, batch, producedAt, code });
-      toast({ title: "Transaction confirmed", description: `Block #${tx.blockNumber.toLocaleString()} · ${tx.txHash.slice(0, 18)}…` });
+      const { product, tx } = await registerProduct({ name, batch, producedAt, code, signer });
+      const desc = tx.signature
+        ? `Slot ${tx.slot?.toLocaleString()} · sig ${tx.signature.slice(0, 12)}…`
+        : `Block #${tx.blockNumber.toLocaleString()} · ${tx.txHash.slice(0, 18)}…`;
+      toast({
+        title: tx.signature ? "Transaction confirmed (Solana Devnet)" : "Transaction confirmed (simulated)",
+        description: desc,
+      });
+      if (tx.signature) {
+        // open in new tab so user can verify on Solana Explorer
+        setTimeout(() => window.open(explorerTxUrl(tx.signature!), "_blank"), 200);
+      }
       onCreated(product);
       onClose();
       setName(""); setBatch(""); setCode(generateCode());
     } catch (err: any) {
-      toast({ title: "Gagal", description: err.message, variant: "destructive" });
+      toast({ title: "Gagal", description: err?.message ?? "Transaksi ditolak", variant: "destructive" });
     } finally {
       setLoading(false);
+      setStage("idle");
     }
   }
 
@@ -190,10 +206,17 @@ function RegisterDialog({ onClose, onCreated }: { onClose: () => void; onCreated
             <Input id="date" type="date" value={producedAt} onChange={(e) => setProducedAt(e.target.value)} required />
           </div>
         </div>
+        <div className="rounded-md bg-secondary p-3 text-xs text-muted-foreground">
+          {signer
+            ? "Phantom terhubung — registrasi akan menulis memo on-chain ke Solana Devnet."
+            : "Wallet belum terhubung — transaksi akan disimulasi lokal. Hubungkan Phantom untuk on-chain proof."}
+        </div>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>Batal</Button>
           <Button type="submit" disabled={loading}>
-            {loading ? "Waiting for wallet confirmation…" : "Daftarkan & Buat QR"}
+            {loading
+              ? (stage === "wallet" ? "Waiting for wallet confirmation…" : "Mengonfirmasi di blockchain…")
+              : "Daftarkan & Buat QR"}
           </Button>
         </DialogFooter>
       </form>

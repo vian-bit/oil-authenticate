@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { CheckCircle2, AlertTriangle, XCircle, ArrowLeft, Loader2, History } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, ArrowLeft, Loader2, History, ExternalLink } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { ChainBadges, shortHash } from "@/components/ChainBadges";
 import {
-  verifyProduct, type VerifyResult, getNetwork, getProductHistory, type BlockchainTx,
+  verifyProduct, type VerifyResult, getProductHistory, type BlockchainTx,
   decodePayload,
 } from "@/lib/blockchain";
+import { useSolanaSigner } from "@/hooks/use-solana-signer";
+import { explorerTxUrl, SOLANA_NETWORK_LABEL } from "@/lib/solana";
+import { useWallet } from "@/contexts/WalletContext";
 
 export default function Verify() {
   const { code = "" } = useParams();
@@ -15,20 +18,23 @@ export default function Verify() {
   const [result, setResult] = useState<VerifyResult | null>(null);
   const [history, setHistory] = useState<BlockchainTx[]>([]);
   const [stage, setStage] = useState<"wallet" | "pending" | "done">("wallet");
+  const signer = useSolanaSigner();
+  const { connected } = useWallet();
 
   useEffect(() => {
     setResult(null);
-    setStage("wallet");
+    setStage(connected ? "wallet" : "pending");
     const t1 = setTimeout(() => setStage("pending"), 500);
     const payload = decodePayload(params.get("d"));
-    verifyProduct(decodeURIComponent(code), payload).then((r) => {
+    verifyProduct(decodeURIComponent(code), payload, signer).then((r) => {
       setResult(r);
       setStage("done");
       const c = r.kind === "not_found" ? r.code : r.product.code;
       setHistory(getProductHistory(c));
     });
     return () => clearTimeout(t1);
-  }, [code, params]);
+  }, [code, params, signer, connected]);
+
 
   return (
     <Layout>
@@ -45,7 +51,7 @@ export default function Verify() {
               {stage === "wallet" ? "Waiting for wallet confirmation…" : "Memverifikasi di blockchain…"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Memanggil <code className="rounded bg-secondary px-1">verifyProduct()</code> di {getNetwork()}
+              Memanggil <code className="rounded bg-secondary px-1">verifyProduct()</code> di {SOLANA_NETWORK_LABEL}
             </p>
           </div>
         ) : (
@@ -128,15 +134,30 @@ function Banner({
           <Field k="Kode unik" v={<span className="font-mono">{product.code}</span>} />
           <Field k="Batch" v={product.batch} />
           <Field k="Tanggal produksi" v={new Date(product.producedAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} />
-          <Field k="Jaringan" v={getNetwork()} />
-          <Field k="Block #" v={<span className="font-mono">{tx.blockNumber.toLocaleString()}</span>} />
+          <Field k="Jaringan" v={SOLANA_NETWORK_LABEL} />
+          <Field k={tx.signature ? "Slot" : "Block #"} v={<span className="font-mono">#{tx.blockNumber.toLocaleString()}</span>} />
           <div className="sm:col-span-2">
-            <div className="text-xs text-muted-foreground">Hash on-chain</div>
+            <div className="text-xs text-muted-foreground">Hash on-chain produk</div>
             <div className="mt-1 break-all rounded-lg bg-secondary p-3 font-mono text-[11px] leading-relaxed">{product.hash}</div>
           </div>
           <div className="sm:col-span-2">
-            <div className="text-xs text-muted-foreground">Tx verifikasi (baru)</div>
-            <div className="mt-1 break-all rounded-lg bg-secondary p-3 font-mono text-[11px] leading-relaxed">{tx.txHash}</div>
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-muted-foreground">
+                {tx.signature ? "Solana Signature (verifikasi)" : "Tx verifikasi (simulated)"}
+              </div>
+              {tx.signature && (
+                <a href={explorerTxUrl(tx.signature)} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline">
+                  Solana Explorer <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+            <div className="mt-1 break-all rounded-lg bg-secondary p-3 font-mono text-[11px] leading-relaxed">{tx.signature ?? tx.txHash}</div>
+            {tx.blockTime && (
+              <div className="mt-2 text-[11px] text-muted-foreground">
+                Confirmed: {new Date(tx.blockTime * 1000).toLocaleString("id-ID")} · Slot #{tx.slot?.toLocaleString()}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -28,13 +28,27 @@ export interface BlockchainTx {
   timestamp: number;
   verifier?: string;
   result?: "authentic" | "used" | "not_found";
+  // Solana on-chain proof (present when wallet connected)
+  signature?: string;   // real Solana tx signature
+  slot?: number;        // Solana slot
+  blockTime?: number | null;
+  wallet?: string;      // signer address
+  network?: string;     // label
 }
 
 const PRODUCTS_KEY = "oilguard.products.v2";
 const TX_KEY = "oilguard.txs.v2";
 const BLOCK_KEY = "oilguard.block.v2";
-const NETWORK = "Polygon Amoy (simulated)";
+const NETWORK = "Solana Devnet";
 const GENESIS_BLOCK = 88_421_000;
+
+export type SolanaSigner = (memo: string) => Promise<{
+  signature: string;
+  slot: number;
+  blockTime: number | null;
+  wallet: string;
+}>;
+
 
 /* ---------------- helpers ---------------- */
 
@@ -115,6 +129,7 @@ export async function registerProduct(input: {
   batch: string;
   producedAt: string;
   code?: string;
+  signer?: SolanaSigner;
 }): Promise<{ product: Product; tx: BlockchainTx }> {
   const code = input.code ?? generateCode();
   const items = loadProducts();
@@ -122,7 +137,33 @@ export async function registerProduct(input: {
     throw new Error("Kode produk sudah terdaftar");
   }
   const hash = await sha256(`${code}|${input.batch}|${input.producedAt}|${input.name}`);
-  const txHash = randomTx();
+
+  // Try real Solana tx if signer provided
+  let signature: string | undefined;
+  let slot: number | undefined;
+  let blockTime: number | null | undefined;
+  let wallet: string | undefined;
+  if (input.signer) {
+    const memo = JSON.stringify({
+      app: "OilGuard",
+      type: "REGISTER",
+      code,
+      name: input.name,
+      batch: input.batch,
+      producedAt: input.producedAt,
+      hash,
+    });
+    const r = await input.signer(memo);
+    signature = r.signature;
+    slot = r.slot;
+    blockTime = r.blockTime;
+    wallet = r.wallet;
+  } else {
+    // simulate confirmation latency
+    await new Promise((r) => setTimeout(r, 350));
+  }
+
+  const txHash = signature ?? randomTx();
   const product: Product = {
     code,
     name: input.name,
@@ -136,19 +177,20 @@ export async function registerProduct(input: {
   items.unshift(product);
   saveProducts(items);
 
-  // simulate block confirmation
-  await new Promise((r) => setTimeout(r, 350));
   const tx: BlockchainTx = {
     txHash,
     txType: "REGISTER",
     productCode: code,
     productName: product.name,
-    blockNumber: nextBlock(),
-    timestamp: Date.now(),
+    blockNumber: slot ?? nextBlock(),
+    timestamp: blockTime ? blockTime * 1000 : Date.now(),
+    signature, slot, blockTime, wallet,
+    network: NETWORK,
   };
   appendTx(tx);
   return { product, tx };
 }
+
 
 export type VerifyResult =
   | { kind: "authentic"; product: Product; tx: BlockchainTx }
@@ -184,8 +226,8 @@ export function encodePayload(p: VerifyPayload): string {
 export async function verifyProduct(
   code: string,
   payload?: VerifyPayload | null,
+  signer?: SolanaSigner,
 ): Promise<VerifyResult> {
-  await new Promise((r) => setTimeout(r, 400));
   const trimmed = code.trim().toUpperCase();
   let items = loadProducts();
   let idx = items.findIndex((p) => p.code.toUpperCase() === trimmed);
@@ -200,21 +242,51 @@ export async function verifyProduct(
         name: payload.name,
         batch: payload.batch,
         producedAt: payload.producedAt,
+        // do NOT use signer here — register memo not desired during verify
       });
       items = loadProducts();
       idx = items.findIndex((p) => p.code.toUpperCase() === trimmed);
     } catch { /* already exists or invalid — fall through */ }
   }
 
+  // Real Solana memo (if signer present)
+  let signature: string | undefined;
+  let slot: number | undefined;
+  let blockTime: number | null | undefined;
+  let wallet: string | undefined;
+  if (signer) {
+    const product = idx === -1 ? null : items[idx];
+    const memo = JSON.stringify({
+      app: "OilGuard",
+      type: "VERIFY",
+      code: trimmed,
+      result: idx === -1 ? "not_found" : (product?.status === "active" ? "authentic" : "used"),
+      ts: Date.now(),
+    });
+    try {
+      const r = await signer(memo);
+      signature = r.signature;
+      slot = r.slot;
+      blockTime = r.blockTime;
+      wallet = r.wallet;
+    } catch (e) {
+      // If signer fails (rejected, no funds), fall back to simulated.
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  } else {
+    await new Promise((r) => setTimeout(r, 300));
+  }
+
   if (idx === -1) {
     const tx: BlockchainTx = {
-      txHash: randomTx(),
+      txHash: signature ?? randomTx(),
       txType: "VERIFY",
       productCode: trimmed,
-      blockNumber: nextBlock(),
-      timestamp: Date.now(),
-      verifier,
+      blockNumber: slot ?? nextBlock(),
+      timestamp: blockTime ? blockTime * 1000 : Date.now(),
+      verifier: wallet ?? verifier,
       result: "not_found",
+      signature, slot, blockTime, wallet, network: NETWORK,
     };
     appendTx(tx);
     return { kind: "not_found", code: trimmed, tx };
@@ -230,14 +302,15 @@ export async function verifyProduct(
   }
 
   const tx: BlockchainTx = {
-    txHash: randomTx(),
+    txHash: signature ?? randomTx(),
     txType: "VERIFY",
     productCode: p.code,
     productName: p.name,
-    blockNumber: nextBlock(),
-    timestamp: Date.now(),
-    verifier,
+    blockNumber: slot ?? nextBlock(),
+    timestamp: blockTime ? blockTime * 1000 : Date.now(),
+    verifier: wallet ?? verifier,
     result: wasActive ? "authentic" : "used",
+    signature, slot, blockTime, wallet, network: NETWORK,
   };
   appendTx(tx);
 
@@ -247,6 +320,7 @@ export async function verifyProduct(
   ).length;
   return { kind: "used", product: p, tx, previousVerifications };
 }
+
 
 export function listProducts(): Product[] { return loadProducts(); }
 export function listTransactions(): BlockchainTx[] { return loadTxs(); }
