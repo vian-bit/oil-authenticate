@@ -51,7 +51,7 @@ export default function Verify() {
               {stage === "wallet" ? "Waiting for wallet confirmation…" : "Memverifikasi di blockchain…"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Memanggil <code className="rounded bg-secondary px-1">verifyProduct()</code> di {getNetwork()}
+              Memanggil <code className="rounded bg-secondary px-1">verifyProduct()</code> di {SOLANA_NETWORK_LABEL}
             </p>
           </div>
         ) : (
