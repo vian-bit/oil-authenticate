@@ -155,14 +155,57 @@ export type VerifyResult =
   | { kind: "used"; product: Product; tx: BlockchainTx; previousVerifications: number }
   | { kind: "not_found"; code: string; tx: BlockchainTx };
 
-export async function verifyProduct(code: string): Promise<VerifyResult> {
+export interface VerifyPayload {
+  code: string;
+  name: string;
+  batch: string;
+  producedAt: string;
+}
+
+/** Decode `?d=` query payload from a verify link (base64url JSON). */
+export function decodePayload(raw: string | null | undefined): VerifyPayload | null {
+  if (!raw) return null;
+  try {
+    const b64 = raw.replace(/-/g, "+").replace(/_/g, "/");
+    const json = decodeURIComponent(escape(atob(b64)));
+    const obj = JSON.parse(json);
+    if (obj && typeof obj.code === "string" && typeof obj.name === "string") return obj;
+  } catch { /* noop */ }
+  return null;
+}
+
+/** Encode product data to base64url JSON for embedding in QR URL. */
+export function encodePayload(p: VerifyPayload): string {
+  const json = JSON.stringify(p);
+  const b64 = btoa(unescape(encodeURIComponent(json)));
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export async function verifyProduct(
+  code: string,
+  payload?: VerifyPayload | null,
+): Promise<VerifyResult> {
   await new Promise((r) => setTimeout(r, 400));
-  const trimmed = code.trim();
-  const items = loadProducts();
-  const idx = items.findIndex((p) => p.code === trimmed);
+  const trimmed = code.trim().toUpperCase();
+  let items = loadProducts();
+  let idx = items.findIndex((p) => p.code.toUpperCase() === trimmed);
   const verifier = randomVerifier();
 
-  // not found — still log a tx for the audit trail
+  // Cross-device recovery: if the QR/link carried product data, auto-register it
+  // on this device's local ledger so verification can succeed end-to-end.
+  if (idx === -1 && payload && payload.code.trim().toUpperCase() === trimmed) {
+    try {
+      await registerProduct({
+        code: trimmed,
+        name: payload.name,
+        batch: payload.batch,
+        producedAt: payload.producedAt,
+      });
+      items = loadProducts();
+      idx = items.findIndex((p) => p.code.toUpperCase() === trimmed);
+    } catch { /* already exists or invalid — fall through */ }
+  }
+
   if (idx === -1) {
     const tx: BlockchainTx = {
       txHash: randomTx(),
@@ -180,7 +223,6 @@ export async function verifyProduct(code: string): Promise<VerifyResult> {
   const p = items[idx];
   const wasActive = p.status === "active";
 
-  // mark used after first verification, but every verify still emits a tx
   if (wasActive) {
     p.status = "used";
     items[idx] = p;
