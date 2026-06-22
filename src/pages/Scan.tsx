@@ -20,19 +20,32 @@ export default function Scan() {
     if (c) nav(`/verify/${encodeURIComponent(c)}`, { replace: true });
   }, [params, nav]);
 
-  function submit(c: string) {
-    const v = c.trim();
+  function submit(c: string, query = "") {
+    const v = c.trim().toUpperCase();
     if (!v) return;
-    nav(`/verify/${encodeURIComponent(v)}`);
+    nav(`/verify/${encodeURIComponent(v)}${query}`);
   }
 
   function handleScanResult(text: string) {
-    // Accept either a raw OG-XXXX-XXXX code or a /verify/<code> URL
-    let parsed = text.trim();
-    const match = parsed.match(/(OG-[A-Z0-9]{4}-[A-Z0-9]{4})/i);
-    if (match) parsed = match[1].toUpperCase();
-    toast.success("QR ditemukan", { description: parsed, icon: <CheckCircle2 className="h-4 w-4" /> });
-    submit(parsed);
+    // Accepts a raw OG-XXXX-XXXX code OR a full /verify/<code>?d=... URL.
+    const raw = text.trim();
+    let code = raw;
+    let query = "";
+    try {
+      // Try parse as URL to preserve the ?d= payload if present.
+      const u = new URL(raw);
+      const m = u.pathname.match(/(OG-[A-Z0-9]{4}-[A-Z0-9]{4})/i);
+      if (m) {
+        code = m[1].toUpperCase();
+        const d = u.searchParams.get("d");
+        if (d) query = `?d=${encodeURIComponent(d)}`;
+      }
+    } catch {
+      const m = raw.match(/(OG-[A-Z0-9]{4}-[A-Z0-9]{4})/i);
+      if (m) code = m[1].toUpperCase();
+    }
+    toast.success("QR ditemukan", { description: code, icon: <CheckCircle2 className="h-4 w-4" /> });
+    submit(code, query);
   }
 
   function simulateScan() {
