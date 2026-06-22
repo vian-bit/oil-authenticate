@@ -226,8 +226,8 @@ export function encodePayload(p: VerifyPayload): string {
 export async function verifyProduct(
   code: string,
   payload?: VerifyPayload | null,
+  signer?: SolanaSigner,
 ): Promise<VerifyResult> {
-  await new Promise((r) => setTimeout(r, 400));
   const trimmed = code.trim().toUpperCase();
   let items = loadProducts();
   let idx = items.findIndex((p) => p.code.toUpperCase() === trimmed);
@@ -242,21 +242,51 @@ export async function verifyProduct(
         name: payload.name,
         batch: payload.batch,
         producedAt: payload.producedAt,
+        // do NOT use signer here — register memo not desired during verify
       });
       items = loadProducts();
       idx = items.findIndex((p) => p.code.toUpperCase() === trimmed);
     } catch { /* already exists or invalid — fall through */ }
   }
 
+  // Real Solana memo (if signer present)
+  let signature: string | undefined;
+  let slot: number | undefined;
+  let blockTime: number | null | undefined;
+  let wallet: string | undefined;
+  if (signer) {
+    const product = idx === -1 ? null : items[idx];
+    const memo = JSON.stringify({
+      app: "OilGuard",
+      type: "VERIFY",
+      code: trimmed,
+      result: idx === -1 ? "not_found" : (product?.status === "active" ? "authentic" : "used"),
+      ts: Date.now(),
+    });
+    try {
+      const r = await signer(memo);
+      signature = r.signature;
+      slot = r.slot;
+      blockTime = r.blockTime;
+      wallet = r.wallet;
+    } catch (e) {
+      // If signer fails (rejected, no funds), fall back to simulated.
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  } else {
+    await new Promise((r) => setTimeout(r, 300));
+  }
+
   if (idx === -1) {
     const tx: BlockchainTx = {
-      txHash: randomTx(),
+      txHash: signature ?? randomTx(),
       txType: "VERIFY",
       productCode: trimmed,
-      blockNumber: nextBlock(),
-      timestamp: Date.now(),
-      verifier,
+      blockNumber: slot ?? nextBlock(),
+      timestamp: blockTime ? blockTime * 1000 : Date.now(),
+      verifier: wallet ?? verifier,
       result: "not_found",
+      signature, slot, blockTime, wallet, network: NETWORK,
     };
     appendTx(tx);
     return { kind: "not_found", code: trimmed, tx };
@@ -272,14 +302,15 @@ export async function verifyProduct(
   }
 
   const tx: BlockchainTx = {
-    txHash: randomTx(),
+    txHash: signature ?? randomTx(),
     txType: "VERIFY",
     productCode: p.code,
     productName: p.name,
-    blockNumber: nextBlock(),
-    timestamp: Date.now(),
-    verifier,
+    blockNumber: slot ?? nextBlock(),
+    timestamp: blockTime ? blockTime * 1000 : Date.now(),
+    verifier: wallet ?? verifier,
     result: wasActive ? "authentic" : "used",
+    signature, slot, blockTime, wallet, network: NETWORK,
   };
   appendTx(tx);
 
@@ -289,6 +320,7 @@ export async function verifyProduct(
   ).length;
   return { kind: "used", product: p, tx, previousVerifications };
 }
+
 
 export function listProducts(): Product[] { return loadProducts(); }
 export function listTransactions(): BlockchainTx[] { return loadTxs(); }
