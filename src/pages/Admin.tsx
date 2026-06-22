@@ -15,6 +15,8 @@ import {
   generateCode, listProducts, registerProduct, getStats, seedDemoData,
   encodePayload, type Product,
 } from "@/lib/blockchain";
+import { useSolanaSigner } from "@/hooks/use-solana-signer";
+import { explorerTxUrl } from "@/lib/solana";
 import { toast } from "@/hooks/use-toast";
 
 export default function Admin() {
