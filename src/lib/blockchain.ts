@@ -28,13 +28,27 @@ export interface BlockchainTx {
   timestamp: number;
   verifier?: string;
   result?: "authentic" | "used" | "not_found";
+  // Solana on-chain proof (present when wallet connected)
+  signature?: string;   // real Solana tx signature
+  slot?: number;        // Solana slot
+  blockTime?: number | null;
+  wallet?: string;      // signer address
+  network?: string;     // label
 }
 
 const PRODUCTS_KEY = "oilguard.products.v2";
 const TX_KEY = "oilguard.txs.v2";
 const BLOCK_KEY = "oilguard.block.v2";
-const NETWORK = "Polygon Amoy (simulated)";
+const NETWORK = "Solana Devnet";
 const GENESIS_BLOCK = 88_421_000;
+
+export type SolanaSigner = (memo: string) => Promise<{
+  signature: string;
+  slot: number;
+  blockTime: number | null;
+  wallet: string;
+}>;
+
 
 /* ---------------- helpers ---------------- */
 
