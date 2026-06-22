@@ -147,21 +147,35 @@ function RegisterDialog({ onClose, onCreated }: { onClose: () => void; onCreated
   const [producedAt, setProducedAt] = useState(new Date().toISOString().slice(0, 10));
   const [code, setCode] = useState(generateCode());
   const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState<"idle" | "wallet" | "confirming">("idle");
+  const signer = useSolanaSigner();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!name || !batch) return;
     setLoading(true);
+    setStage(signer ? "wallet" : "confirming");
     try {
-      const { product, tx } = await registerProduct({ name, batch, producedAt, code });
-      toast({ title: "Transaction confirmed", description: `Block #${tx.blockNumber.toLocaleString()} · ${tx.txHash.slice(0, 18)}…` });
+      const { product, tx } = await registerProduct({ name, batch, producedAt, code, signer });
+      const desc = tx.signature
+        ? `Slot ${tx.slot?.toLocaleString()} · sig ${tx.signature.slice(0, 12)}…`
+        : `Block #${tx.blockNumber.toLocaleString()} · ${tx.txHash.slice(0, 18)}…`;
+      toast({
+        title: tx.signature ? "Transaction confirmed (Solana Devnet)" : "Transaction confirmed (simulated)",
+        description: desc,
+      });
+      if (tx.signature) {
+        // open in new tab so user can verify on Solana Explorer
+        setTimeout(() => window.open(explorerTxUrl(tx.signature!), "_blank"), 200);
+      }
       onCreated(product);
       onClose();
       setName(""); setBatch(""); setCode(generateCode());
     } catch (err: any) {
-      toast({ title: "Gagal", description: err.message, variant: "destructive" });
+      toast({ title: "Gagal", description: err?.message ?? "Transaksi ditolak", variant: "destructive" });
     } finally {
       setLoading(false);
+      setStage("idle");
     }
   }
 
