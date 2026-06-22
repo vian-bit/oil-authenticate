@@ -129,6 +129,7 @@ export async function registerProduct(input: {
   batch: string;
   producedAt: string;
   code?: string;
+  signer?: SolanaSigner;
 }): Promise<{ product: Product; tx: BlockchainTx }> {
   const code = input.code ?? generateCode();
   const items = loadProducts();
@@ -136,7 +137,33 @@ export async function registerProduct(input: {
     throw new Error("Kode produk sudah terdaftar");
   }
   const hash = await sha256(`${code}|${input.batch}|${input.producedAt}|${input.name}`);
-  const txHash = randomTx();
+
+  // Try real Solana tx if signer provided
+  let signature: string | undefined;
+  let slot: number | undefined;
+  let blockTime: number | null | undefined;
+  let wallet: string | undefined;
+  if (input.signer) {
+    const memo = JSON.stringify({
+      app: "OilGuard",
+      type: "REGISTER",
+      code,
+      name: input.name,
+      batch: input.batch,
+      producedAt: input.producedAt,
+      hash,
+    });
+    const r = await input.signer(memo);
+    signature = r.signature;
+    slot = r.slot;
+    blockTime = r.blockTime;
+    wallet = r.wallet;
+  } else {
+    // simulate confirmation latency
+    await new Promise((r) => setTimeout(r, 350));
+  }
+
+  const txHash = signature ?? randomTx();
   const product: Product = {
     code,
     name: input.name,
@@ -150,19 +177,20 @@ export async function registerProduct(input: {
   items.unshift(product);
   saveProducts(items);
 
-  // simulate block confirmation
-  await new Promise((r) => setTimeout(r, 350));
   const tx: BlockchainTx = {
     txHash,
     txType: "REGISTER",
     productCode: code,
     productName: product.name,
-    blockNumber: nextBlock(),
-    timestamp: Date.now(),
+    blockNumber: slot ?? nextBlock(),
+    timestamp: blockTime ? blockTime * 1000 : Date.now(),
+    signature, slot, blockTime, wallet,
+    network: NETWORK,
   };
   appendTx(tx);
   return { product, tx };
 }
+
 
 export type VerifyResult =
   | { kind: "authentic"; product: Product; tx: BlockchainTx }
