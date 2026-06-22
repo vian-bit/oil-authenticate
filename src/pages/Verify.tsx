@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { CheckCircle2, AlertTriangle, XCircle, ArrowLeft, Loader2, History } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { ChainBadges, shortHash } from "@/components/ChainBadges";
 import {
   verifyProduct, type VerifyResult, getNetwork, getProductHistory, type BlockchainTx,
+  decodePayload,
 } from "@/lib/blockchain";
 
 export default function Verify() {
   const { code = "" } = useParams();
+  const [params] = useSearchParams();
   const [result, setResult] = useState<VerifyResult | null>(null);
   const [history, setHistory] = useState<BlockchainTx[]>([]);
   const [stage, setStage] = useState<"wallet" | "pending" | "done">("wallet");
@@ -18,14 +20,15 @@ export default function Verify() {
     setResult(null);
     setStage("wallet");
     const t1 = setTimeout(() => setStage("pending"), 500);
-    verifyProduct(decodeURIComponent(code)).then((r) => {
+    const payload = decodePayload(params.get("d"));
+    verifyProduct(decodeURIComponent(code), payload).then((r) => {
       setResult(r);
       setStage("done");
       const c = r.kind === "not_found" ? r.code : r.product.code;
       setHistory(getProductHistory(c));
     });
     return () => clearTimeout(t1);
-  }, [code]);
+  }, [code, params]);
 
   return (
     <Layout>

@@ -13,7 +13,7 @@ import { ProductQR } from "@/components/ProductQR";
 import { ChainBadges } from "@/components/ChainBadges";
 import {
   generateCode, listProducts, registerProduct, getStats, seedDemoData,
-  type Product,
+  encodePayload, type Product,
 } from "@/lib/blockchain";
 import { toast } from "@/hooks/use-toast";
 
@@ -203,7 +203,13 @@ function RegisterDialog({ onClose, onCreated }: { onClose: () => void; onCreated
 
 function QRDialog({ product }: { product: Product }) {
   const [copied, setCopied] = useState(false);
-  const url = `${window.location.origin}/verify/${encodeURIComponent(product.code)}`;
+  const payload = encodePayload({
+    code: product.code,
+    name: product.name,
+    batch: product.batch,
+    producedAt: product.producedAt,
+  });
+  const url = `${window.location.origin}/verify/${encodeURIComponent(product.code)}?d=${payload}`;
   function copy() {
     navigator.clipboard.writeText(url);
     setCopied(true);
