@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { ChainBadges, shortHash } from "@/components/ChainBadges";
 import { ProductQR } from "@/components/ProductQR";
 import {
-  getProductByCode, getProductHistory, getNetwork,
+  getProductByCode, getProductHistory,
   type Product, type BlockchainTx,
 } from "@/lib/blockchain";
+import { explorerTxUrl, SOLANA_NETWORK_LABEL } from "@/lib/solana";
+import { ExternalLink } from "lucide-react";
 
 export default function ProductDetail() {
   const { code = "" } = useParams();
