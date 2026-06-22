@@ -61,7 +61,7 @@ export default function Index() {
               <Field k="Kode" v="OG-9X2A-4LM7" />
               <Field k="Batch" v="B-2410-A" />
               <Field k="Produksi" v="12 Okt 2024" />
-              <Field k="Jaringan" v="Polygon Amoy" />
+              <Field k="Jaringan" v="Solana Devnet" />
             </div>
             <div className="mt-5 rounded-lg bg-secondary p-3 font-mono text-[11px] leading-relaxed text-secondary-foreground break-all">
               tx: 0x7a3c…e91b · block #84,221,007
