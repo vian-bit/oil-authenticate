@@ -134,15 +134,30 @@ function Banner({
           <Field k="Kode unik" v={<span className="font-mono">{product.code}</span>} />
           <Field k="Batch" v={product.batch} />
           <Field k="Tanggal produksi" v={new Date(product.producedAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} />
-          <Field k="Jaringan" v={getNetwork()} />
-          <Field k="Block #" v={<span className="font-mono">{tx.blockNumber.toLocaleString()}</span>} />
+          <Field k="Jaringan" v={SOLANA_NETWORK_LABEL} />
+          <Field k={tx.signature ? "Slot" : "Block #"} v={<span className="font-mono">#{tx.blockNumber.toLocaleString()}</span>} />
           <div className="sm:col-span-2">
-            <div className="text-xs text-muted-foreground">Hash on-chain</div>
+            <div className="text-xs text-muted-foreground">Hash on-chain produk</div>
             <div className="mt-1 break-all rounded-lg bg-secondary p-3 font-mono text-[11px] leading-relaxed">{product.hash}</div>
           </div>
           <div className="sm:col-span-2">
-            <div className="text-xs text-muted-foreground">Tx verifikasi (baru)</div>
-            <div className="mt-1 break-all rounded-lg bg-secondary p-3 font-mono text-[11px] leading-relaxed">{tx.txHash}</div>
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-muted-foreground">
+                {tx.signature ? "Solana Signature (verifikasi)" : "Tx verifikasi (simulated)"}
+              </div>
+              {tx.signature && (
+                <a href={explorerTxUrl(tx.signature)} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline">
+                  Solana Explorer <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+            <div className="mt-1 break-all rounded-lg bg-secondary p-3 font-mono text-[11px] leading-relaxed">{tx.signature ?? tx.txHash}</div>
+            {tx.blockTime && (
+              <div className="mt-2 text-[11px] text-muted-foreground">
+                Confirmed: {new Date(tx.blockTime * 1000).toLocaleString("id-ID")} · Slot #{tx.slot?.toLocaleString()}
+              </div>
+            )}
           </div>
         </div>
       )}
