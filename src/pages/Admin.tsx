@@ -206,10 +206,17 @@ function RegisterDialog({ onClose, onCreated }: { onClose: () => void; onCreated
             <Input id="date" type="date" value={producedAt} onChange={(e) => setProducedAt(e.target.value)} required />
           </div>
         </div>
+        <div className="rounded-md bg-secondary p-3 text-xs text-muted-foreground">
+          {signer
+            ? "Phantom terhubung — registrasi akan menulis memo on-chain ke Solana Devnet."
+            : "Wallet belum terhubung — transaksi akan disimulasi lokal. Hubungkan Phantom untuk on-chain proof."}
+        </div>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>Batal</Button>
           <Button type="submit" disabled={loading}>
-            {loading ? "Waiting for wallet confirmation…" : "Daftarkan & Buat QR"}
+            {loading
+              ? (stage === "wallet" ? "Waiting for wallet confirmation…" : "Mengonfirmasi di blockchain…")
+              : "Daftarkan & Buat QR"}
           </Button>
         </DialogFooter>
       </form>
