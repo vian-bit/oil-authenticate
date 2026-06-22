@@ -32,9 +32,11 @@ export default function SolanaExplorer() {
     setLoading(true);
     try {
       // 1. local txs that have a real signature
-      const local = listTransactions().filter((t) => !!t.signature) as Required<Pick<BlockchainTx, "signature">>[] & BlockchainTx[];
+      const local = listTransactions().filter(
+        (t): t is BlockchainTx & { signature: string } => !!t.signature,
+      );
       const localRows: Row[] = local.map((t) => ({
-        signature: t.signature!,
+        signature: t.signature,
         slot: t.slot ?? 0,
         blockTime: t.blockTime ?? null,
         err: null,
