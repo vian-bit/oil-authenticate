@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Package, ShieldCheck, Clock, Copy, Check } from "lucide-react";
+import { Plus, Package, ShieldCheck, Clock, Copy, Check, Layers, Boxes } from "lucide-react";
+import { Link } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ProductQR } from "@/components/ProductQR";
+import { ChainBadges } from "@/components/ChainBadges";
 import {
   generateCode, listProducts, registerProduct, getStats, seedDemoData,
   type Product,
@@ -19,23 +21,26 @@ export default function Admin() {
   const [items, setItems] = useState<Product[]>([]);
   const [open, setOpen] = useState(false);
   const [qrFor, setQrFor] = useState<Product | null>(null);
+  const [tick, setTick] = useState(0);
 
   function refresh() {
     setItems(listProducts());
+    setTick((t) => t + 1);
   }
 
   useEffect(() => {
-    seedDemoData();
-    setTimeout(refresh, 500);
+    seedDemoData().then(() => refresh());
   }, []);
 
-  const stats = useMemo(() => getStats(), [items]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stats = useMemo(() => getStats(), [items, tick]);
 
   return (
     <Layout>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard Admin</h1>
+          <ChainBadges />
+          <h1 className="mt-3 text-3xl font-bold tracking-tight">Dashboard Admin</h1>
           <p className="mt-1 text-muted-foreground">Kelola registrasi produk oli on-chain.</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -44,23 +49,23 @@ export default function Admin() {
           </DialogTrigger>
           <RegisterDialog
             onClose={() => setOpen(false)}
-            onCreated={(p) => {
-              refresh();
-              setQrFor(p);
-            }}
+            onCreated={(p) => { refresh(); setQrFor(p); }}
           />
         </Dialog>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Total produk" value={stats.total} icon={Package} tone="primary" />
-        <StatCard label="Sudah diverifikasi" value={stats.verified} icon={ShieldCheck} tone="success" />
+        <StatCard label="Total verifikasi" value={stats.totalVerifyTx} icon={ShieldCheck} tone="success" />
+        <StatCard label="Total transaksi" value={stats.totalTx} icon={Layers} tone="accent" />
+        <StatCard label="Block tercatat" value={`#${stats.lastBlock.toLocaleString()}`} icon={Boxes} tone="primary" />
         <StatCard label="Belum discan" value={stats.pending} icon={Clock} tone="accent" />
       </div>
 
       <div className="mt-8 rounded-2xl border border-border bg-card">
-        <div className="border-b border-border p-5">
+        <div className="flex items-center justify-between border-b border-border p-5">
           <h2 className="font-bold">Daftar Produk Terdaftar</h2>
+          <Button asChild size="sm" variant="secondary"><Link to="/explorer">Buka Explorer</Link></Button>
         </div>
         <div className="overflow-x-auto">
           <Table>
@@ -78,14 +83,16 @@ export default function Admin() {
               {items.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                    Belum ada produk. Klik “Tambah Produk” untuk mulai.
+                    Belum ada produk. Klik "Tambah Produk" untuk mulai.
                   </TableCell>
                 </TableRow>
               ) : (
                 items.map((p) => (
                   <TableRow key={p.code}>
                     <TableCell className="font-medium">{p.name}</TableCell>
-                    <TableCell className="font-mono text-xs">{p.code}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <Link to={`/product/${encodeURIComponent(p.code)}`} className="hover:underline">{p.code}</Link>
+                    </TableCell>
                     <TableCell>{p.batch}</TableCell>
                     <TableCell>{new Date(p.producedAt).toLocaleDateString("id-ID")}</TableCell>
                     <TableCell><StatusPill status={p.status} /></TableCell>
@@ -113,7 +120,7 @@ function StatusPill({ status }: { status: "active" | "used" }) {
   return <span className="rounded-full bg-success px-2.5 py-1 text-[11px] font-bold text-success-foreground">DIVERIFIKASI</span>;
 }
 
-function StatCard({ label, value, icon: Icon, tone }: { label: string; value: number; icon: any; tone: "primary" | "success" | "accent" }) {
+function StatCard({ label, value, icon: Icon, tone }: { label: string; value: number | string; icon: any; tone: "primary" | "success" | "accent" }) {
   const cls = {
     primary: "bg-primary text-primary-foreground",
     success: "bg-success text-success-foreground",
@@ -127,7 +134,7 @@ function StatCard({ label, value, icon: Icon, tone }: { label: string; value: nu
           <Icon className="h-4 w-4" />
         </span>
       </div>
-      <div className="mt-3 text-3xl font-bold">{value}</div>
+      <div className="mt-3 text-2xl font-bold">{value}</div>
     </div>
   );
 }
@@ -144,9 +151,9 @@ function RegisterDialog({ onClose, onCreated }: { onClose: () => void; onCreated
     if (!name || !batch) return;
     setLoading(true);
     try {
-      const p = await registerProduct({ name, batch, producedAt, code });
-      toast({ title: "Produk terdaftar", description: `Tx: ${p.txRegister.slice(0, 18)}…` });
-      onCreated(p);
+      const { product, tx } = await registerProduct({ name, batch, producedAt, code });
+      toast({ title: "Transaction confirmed", description: `Block #${tx.blockNumber.toLocaleString()} · ${tx.txHash.slice(0, 18)}…` });
+      onCreated(product);
       onClose();
       setName(""); setBatch(""); setCode(generateCode());
     } catch (err: any) {
@@ -185,7 +192,9 @@ function RegisterDialog({ onClose, onCreated }: { onClose: () => void; onCreated
         </div>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>Batal</Button>
-          <Button type="submit" disabled={loading}>{loading ? "Menulis ke chain…" : "Daftarkan & Buat QR"}</Button>
+          <Button type="submit" disabled={loading}>
+            {loading ? "Waiting for wallet confirmation…" : "Daftarkan & Buat QR"}
+          </Button>
         </DialogFooter>
       </form>
     </DialogContent>
