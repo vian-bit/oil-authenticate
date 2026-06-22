@@ -203,7 +203,13 @@ function RegisterDialog({ onClose, onCreated }: { onClose: () => void; onCreated
 
 function QRDialog({ product }: { product: Product }) {
   const [copied, setCopied] = useState(false);
-  const url = `${window.location.origin}/verify/${encodeURIComponent(product.code)}`;
+  const payload = encodePayload({
+    code: product.code,
+    name: product.name,
+    batch: product.batch,
+    producedAt: product.producedAt,
+  });
+  const url = `${window.location.origin}/verify/${encodeURIComponent(product.code)}?d=${payload}`;
   function copy() {
     navigator.clipboard.writeText(url);
     setCopied(true);
