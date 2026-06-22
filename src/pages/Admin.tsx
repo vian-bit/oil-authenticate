@@ -13,7 +13,7 @@ import { ProductQR } from "@/components/ProductQR";
 import { ChainBadges } from "@/components/ChainBadges";
 import {
   generateCode, listProducts, registerProduct, getStats, seedDemoData,
-  type Product,
+  encodePayload, type Product,
 } from "@/lib/blockchain";
 import { toast } from "@/hooks/use-toast";
 
