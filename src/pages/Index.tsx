@@ -1,23 +1,23 @@
 import { Link } from "react-router-dom";
-import { ScanLine, ShieldCheck, PackageCheck, Layers, Lock } from "lucide-react";
+import { ScanLine, ShieldCheck, PackageCheck, Layers, Lock, Activity } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { getStats, seedDemoData } from "@/lib/blockchain";
+import { ChainBadges } from "@/components/ChainBadges";
 
 export default function Index() {
-  const [stats, setStats] = useState({ total: 0, verified: 0, pending: 0 });
+  const [stats, setStats] = useState({ total: 0, verified: 0, pending: 0, totalTx: 0, totalVerifyTx: 0, lastBlock: 0 });
 
   useEffect(() => {
-    seedDemoData();
-    const t = setTimeout(() => setStats(getStats()), 500);
-    return () => clearTimeout(t);
+    seedDemoData().then(() => setStats(getStats()));
   }, []);
 
   return (
     <Layout>
       <section className="grid items-center gap-10 md:grid-cols-2">
         <div>
+          <ChainBadges className="mb-3" />
           <span className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-secondary-foreground">
             <Lock className="h-3.5 w-3.5" /> Polygon · Smart Contract
           </span>
@@ -33,14 +33,15 @@ export default function Index() {
               <Link to="/scan"><ScanLine className="mr-2 h-5 w-5" /> Scan Produk</Link>
             </Button>
             <Button asChild size="lg" variant="secondary" className="h-12 px-6 text-base">
-              <Link to="/scan?mode=manual"><ShieldCheck className="mr-2 h-5 w-5" /> Cek Keaslian</Link>
+              <Link to="/explorer"><Activity className="mr-2 h-5 w-5" /> Lihat Explorer</Link>
             </Button>
           </div>
 
-          <dl className="mt-10 grid grid-cols-3 gap-4">
-            <Stat label="Produk terdaftar" value={stats.total} />
-            <Stat label="Sudah diverifikasi" value={stats.verified} />
-            <Stat label="Belum discan" value={stats.pending} />
+          <dl className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <Stat label="Produk" value={stats.total} />
+            <Stat label="Verifikasi" value={stats.totalVerifyTx} />
+            <Stat label="Total Tx" value={stats.totalTx} />
+            <Stat label="Block" value={`#${stats.lastBlock.toLocaleString()}`} />
           </dl>
         </div>
 
@@ -84,7 +85,7 @@ export default function Index() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="text-2xl font-bold">{value}</div>

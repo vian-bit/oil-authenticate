@@ -23,8 +23,8 @@ contract OilGuard {
     uint256 public totalRegistered;
     uint256 public totalVerified;
 
-    event ProductRegistered(bytes32 indexed hash, uint256 timestamp);
-    event ProductVerified(bytes32 indexed hash, address verifier, uint256 timestamp);
+    event ProductRegistered(string productCode, string productName, bytes32 indexed hash, uint256 timestamp);
+    event ProductVerified(string productCode, address indexed verifier, bytes32 indexed hash, uint256 timestamp);
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "Not admin");
@@ -35,7 +35,7 @@ contract OilGuard {
         admin = msg.sender;
     }
 
-    function registerProduct(bytes32 _hash) external onlyAdmin {
+    function registerProduct(string calldata productCode, string calldata productName, bytes32 _hash) external onlyAdmin {
         require(products[_hash].status == Status.None, "Already registered");
         products[_hash] = Product({
             hash: _hash,
@@ -45,12 +45,14 @@ contract OilGuard {
             verifier: address(0)
         });
         totalRegistered++;
-        emit ProductRegistered(_hash, block.timestamp);
+        emit ProductRegistered(productCode, productName, _hash, block.timestamp);
     }
 
-    /// @notice Verifikasi & tandai produk sebagai used (one-time scan)
-    function verifyProduct(bytes32 _hash) external returns (Status) {
+    /// @notice Verifikasi produk. Setiap pemanggilan memancarkan event sehingga
+    /// seluruh aktivitas tercatat di transaction history.
+    function verifyProduct(string calldata productCode, bytes32 _hash) external returns (Status) {
         Product storage p = products[_hash];
+        emit ProductVerified(productCode, msg.sender, _hash, block.timestamp);
         if (p.status == Status.None) return Status.None;
         if (p.status == Status.Used) return Status.Used;
 
@@ -58,8 +60,7 @@ contract OilGuard {
         p.verifiedAt = block.timestamp;
         p.verifier = msg.sender;
         totalVerified++;
-        emit ProductVerified(_hash, msg.sender, block.timestamp);
-        return Status.Active; // berarti baru saja diverifikasi (asli)
+        return Status.Active;
     }
 
     function getProduct(bytes32 _hash) external view returns (Product memory) {
