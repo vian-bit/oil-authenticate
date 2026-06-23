@@ -99,9 +99,9 @@ export default function SolanaExplorer() {
       {!connected && (
         <div className="mt-6 rounded-2xl border border-border bg-card p-6 text-center">
           <ShieldCheck className="mx-auto h-10 w-10 text-primary" />
-          <h2 className="mt-2 font-bold">Hubungkan Phantom Wallet</h2>
+          <h2 className="mt-2 font-bold">Memuat OilGuard Wallet…</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Hubungkan Phantom untuk menampilkan transaksi register & verify dari Solana Devnet.
+            Wallet built-in sedang disiapkan untuk menampilkan transaksi Solana Devnet.
           </p>
           <div className="mt-4 flex justify-center"><WalletButton /></div>
         </div>
