@@ -208,8 +208,8 @@ function RegisterDialog({ onClose, onCreated }: { onClose: () => void; onCreated
         </div>
         <div className="rounded-md bg-secondary p-3 text-xs text-muted-foreground">
           {signer
-            ? "Phantom terhubung — registrasi akan menulis memo on-chain ke Solana Devnet."
-            : "Wallet belum terhubung — transaksi akan disimulasi lokal. Hubungkan Phantom untuk on-chain proof."}
+            ? "OilGuard Wallet aktif — registrasi akan menulis memo on-chain ke Solana Devnet."
+            : "Wallet sedang dimuat — transaksi akan disimulasi lokal jika belum siap."}
         </div>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>Batal</Button>

@@ -1,23 +1,22 @@
 import { useCallback } from "react";
 import { useWallet } from "@/contexts/WalletContext";
-import { sendMemo } from "@/lib/solana";
+import { sendMemoWithKeypair } from "@/lib/solana";
 import type { SolanaSigner } from "@/lib/blockchain";
 
 /**
- * Returns a SolanaSigner if Phantom is connected, else undefined.
- * The signer sends a Memo Program tx on Devnet and returns the real
- * signature, slot, and blockTime.
+ * Returns a SolanaSigner backed by the in-app Keypair. Always available
+ * once the wallet has been initialized.
  */
 export function useSolanaSigner(): SolanaSigner | undefined {
-  const { provider, publicKey, refreshBalance } = useWallet();
+  const { keypair, refreshBalance } = useWallet();
 
   const signer = useCallback<SolanaSigner>(async (memo) => {
-    if (!provider || !publicKey) throw new Error("Wallet belum terhubung");
-    const r = await sendMemo(provider, memo);
+    if (!keypair) throw new Error("Wallet belum siap");
+    const r = await sendMemoWithKeypair(keypair, memo);
     refreshBalance();
-    return { ...r, wallet: publicKey.toBase58() };
-  }, [provider, publicKey, refreshBalance]);
+    return { ...r, wallet: keypair.publicKey.toBase58() };
+  }, [keypair, refreshBalance]);
 
-  if (!provider || !publicKey) return undefined;
+  if (!keypair) return undefined;
   return signer;
 }

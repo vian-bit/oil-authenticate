@@ -1,12 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { PublicKey } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import {
-  getPhantom, getBalanceSol, requestAirdrop,
-  type PhantomProvider,
+  loadOrCreateKeypair, resetKeypair, getBalanceSol, requestAirdrop,
 } from "@/lib/solana";
 
 interface WalletState {
-  provider: PhantomProvider | null;
+  keypair: Keypair | null;
   publicKey: PublicKey | null;
   address: string | null;
   connected: boolean;
@@ -17,35 +16,26 @@ interface WalletState {
   disconnect: () => Promise<void>;
   refreshBalance: () => Promise<void>;
   airdrop: () => Promise<string>;
+  regenerate: () => void;
 }
 
 const Ctx = createContext<WalletState | null>(null);
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
-  const [provider, setProvider] = useState<PhantomProvider | null>(null);
-  const [publicKey, setPublicKey] = useState<PublicKey | null>(null);
-  const [connecting, setConnecting] = useState(false);
+  const [keypair, setKeypair] = useState<Keypair | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize provider + auto-reconnect "trusted" sessions
+  // Auto-load the in-app wallet on mount — no external extension required.
   useEffect(() => {
-    const p = getPhantom();
-    if (!p) return;
-    setProvider(p);
-    p.connect({ onlyIfTrusted: true })
-      .then(({ publicKey }) => setPublicKey(publicKey))
-      .catch(() => { /* user hasn't trusted yet */ });
-
-    const onConnect = (pk: PublicKey) => setPublicKey(pk);
-    const onDisconnect = () => setPublicKey(null);
-    p.on("connect", onConnect);
-    p.on("disconnect", onDisconnect);
-    return () => {
-      p.removeListener?.("connect", onConnect);
-      p.removeListener?.("disconnect", onDisconnect);
-    };
+    try {
+      setKeypair(loadOrCreateKeypair());
+    } catch (e: any) {
+      setError(e?.message ?? "Gagal memuat wallet lokal");
+    }
   }, []);
+
+  const publicKey = keypair?.publicKey ?? null;
 
   const refreshBalance = useCallback(async () => {
     if (!publicKey) { setBalance(null); return; }
@@ -57,49 +47,40 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   const connect = useCallback(async () => {
     setError(null);
-    const p = provider ?? getPhantom();
-    if (!p) {
-      setError("Phantom wallet tidak terdeteksi. Install di phantom.com");
-      window.open("https://phantom.com/download", "_blank");
-      return;
-    }
-    setProvider(p);
-    setConnecting(true);
-    try {
-      const { publicKey } = await p.connect();
-      setPublicKey(publicKey);
-    } catch (e: any) {
-      setError(e?.message ?? "Gagal connect");
-    } finally {
-      setConnecting(false);
-    }
-  }, [provider]);
+    setKeypair(loadOrCreateKeypair());
+  }, []);
 
   const disconnect = useCallback(async () => {
-    try { await provider?.disconnect(); } catch { /* noop */ }
-    setPublicKey(null);
-  }, [provider]);
+    // Keep keypair in storage; just clear balance display.
+    setBalance(null);
+  }, []);
 
   const airdrop = useCallback(async () => {
-    if (!publicKey) throw new Error("Wallet belum terhubung");
+    if (!publicKey) throw new Error("Wallet belum siap");
     const sig = await requestAirdrop(publicKey, 1);
     refreshBalance();
     return sig;
   }, [publicKey, refreshBalance]);
 
+  const regenerate = useCallback(() => {
+    setKeypair(resetKeypair());
+    setBalance(null);
+  }, []);
+
   const value = useMemo<WalletState>(() => ({
-    provider,
+    keypair,
     publicKey,
     address: publicKey?.toBase58() ?? null,
-    connected: !!publicKey,
-    connecting,
+    connected: !!keypair,
+    connecting: false,
     balance,
     error,
     connect,
     disconnect,
     refreshBalance,
     airdrop,
-  }), [provider, publicKey, connecting, balance, error, connect, disconnect, refreshBalance, airdrop]);
+    regenerate,
+  }), [keypair, publicKey, balance, error, connect, disconnect, refreshBalance, airdrop, regenerate]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

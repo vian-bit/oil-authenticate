@@ -1,4 +1,4 @@
-import { Wallet, LogOut, Loader2, Droplets } from "lucide-react";
+import { Wallet, Loader2, Droplets, RefreshCw, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/contexts/WalletContext";
 import {
@@ -11,7 +11,7 @@ import { toast } from "sonner";
 function shortAddr(a: string) { return `${a.slice(0, 4)}…${a.slice(-4)}`; }
 
 export default function WalletButton({ compact = false }: { compact?: boolean }) {
-  const { connected, connecting, address, balance, connect, disconnect, airdrop } = useWallet();
+  const { connected, connecting, address, balance, connect, airdrop, refreshBalance, regenerate } = useWallet();
 
   if (!connected) {
     return (
@@ -22,7 +22,7 @@ export default function WalletButton({ compact = false }: { compact?: boolean })
         className="gap-2"
       >
         {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
-        {connecting ? "Menyambungkan…" : "Connect Phantom"}
+        {connecting ? "Memuat…" : "Aktifkan Wallet"}
       </Button>
     );
   }
@@ -33,8 +33,14 @@ export default function WalletButton({ compact = false }: { compact?: boolean })
       const sig = await airdrop();
       toast.success("Airdrop sukses", { id: "ad", description: sig.slice(0, 16) + "…" });
     } catch (e: any) {
-      toast.error("Airdrop gagal", { id: "ad", description: e?.message ?? "Rate limit devnet" });
+      toast.error("Airdrop gagal", { id: "ad", description: e?.message ?? "Rate limit devnet — coba lagi" });
     }
+  }
+
+  function copyAddr() {
+    if (!address) return;
+    navigator.clipboard.writeText(address);
+    toast.success("Alamat disalin");
   }
 
   return (
@@ -46,14 +52,20 @@ export default function WalletButton({ compact = false }: { compact?: boolean })
           {balance !== null && <span className="text-muted-foreground">· {balance.toFixed(2)} SOL</span>}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuLabel className="text-xs">
-          Phantom · Solana Devnet
+          OilGuard Wallet · Solana Devnet
           <div className="mt-1 break-all font-mono text-[10px] text-muted-foreground">{address}</div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={doAirdrop}>
           <Droplets className="mr-2 h-4 w-4" /> Airdrop 1 SOL (devnet)
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={refreshBalance}>
+          <RefreshCw className="mr-2 h-4 w-4" /> Refresh saldo
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={copyAddr}>
+          <Copy className="mr-2 h-4 w-4" /> Salin alamat
         </DropdownMenuItem>
         {address && (
           <DropdownMenuItem asChild>
@@ -63,8 +75,13 @@ export default function WalletButton({ compact = false }: { compact?: boolean })
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={disconnect} className="text-danger">
-          <LogOut className="mr-2 h-4 w-4" /> Disconnect
+        <DropdownMenuItem
+          onClick={() => {
+            if (confirm("Buat wallet baru? Saldo SOL devnet di wallet lama akan ditinggalkan.")) regenerate();
+          }}
+          className="text-danger"
+        >
+          <RefreshCw className="mr-2 h-4 w-4" /> Reset wallet
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
