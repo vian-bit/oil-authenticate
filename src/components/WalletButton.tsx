@@ -80,6 +80,31 @@ export default function WalletButton({ compact = false }: { compact?: boolean })
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => {
+            const sk = exportSecret();
+            if (!sk) { toast.error("Tidak ada secret key tersimpan"); return; }
+            navigator.clipboard.writeText(sk);
+            toast.success("Secret key (base58) disalin", { description: "Simpan baik-baik — jangan dibagikan!" });
+          }}
+        >
+          <KeyRound className="mr-2 h-4 w-4" /> Export secret key
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            const input = prompt("Paste secret key (base58 atau JSON array 64 angka):");
+            if (!input) return;
+            try {
+              importSecret(input);
+              toast.success("Wallet diimport — refresh saldo");
+            } catch (e: any) {
+              toast.error("Import gagal", { description: e?.message ?? "Format salah" });
+            }
+          }}
+        >
+          <Upload className="mr-2 h-4 w-4" /> Import secret key
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => {
             if (confirm("Buat wallet baru? Saldo SOL devnet di wallet lama akan ditinggalkan.")) regenerate();
           }}
           className="text-danger"
