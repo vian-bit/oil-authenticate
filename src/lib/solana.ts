@@ -19,6 +19,7 @@ import {
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import { Buffer } from "buffer";
+import bs58 from "bs58";
 
 if (typeof window !== "undefined" && !(window as any).Buffer) {
   (window as any).Buffer = Buffer;
@@ -40,24 +41,67 @@ export function getConnection(): Connection {
 
 const KEY_STORAGE = "oilguard.wallet.secret.v1";
 
+function encodeSecret(sk: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < sk.length; i++) s += String.fromCharCode(sk[i]);
+  return btoa(s);
+}
+function decodeSecret(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
 /** Load existing keypair from localStorage, or create + persist a new one. */
 export function loadOrCreateKeypair(): Keypair {
-  try {
-    const raw = localStorage.getItem(KEY_STORAGE);
-    if (raw) {
-      const arr = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
-      return Keypair.fromSecretKey(arr);
+  const raw = localStorage.getItem(KEY_STORAGE);
+  if (raw) {
+    try {
+      return Keypair.fromSecretKey(decodeSecret(raw));
+    } catch (e) {
+      console.error("[OilGuard] gagal load wallet — TIDAK regenerate untuk hindari kehilangan address. Hapus 'oilguard.wallet.secret.v1' di localStorage untuk reset.", e);
+      throw e;
     }
-  } catch { /* fall through */ }
+  }
   const kp = Keypair.generate();
-  const b64 = btoa(String.fromCharCode(...kp.secretKey));
-  localStorage.setItem(KEY_STORAGE, b64);
+  localStorage.setItem(KEY_STORAGE, encodeSecret(kp.secretKey));
   return kp;
 }
 
 export function resetKeypair(): Keypair {
   localStorage.removeItem(KEY_STORAGE);
   return loadOrCreateKeypair();
+}
+
+/** Export current secret key as base58 string (Phantom-compatible). */
+export function exportSecretKeyBase58(): string | null {
+  const raw = localStorage.getItem(KEY_STORAGE);
+  if (!raw) return null;
+  try { return bs58.encode(decodeSecret(raw)); } catch { return null; }
+}
+
+/** Import a secret key (base58 or JSON array). Returns the loaded Keypair. */
+export function importSecretKey(input: string): Keypair {
+  const trimmed = input.trim();
+  let sk: Uint8Array | null = null;
+  // JSON array form: [12,34,...]
+  if (trimmed.startsWith("[")) {
+    try {
+      const arr = JSON.parse(trimmed);
+      if (Array.isArray(arr) && arr.length === 64) sk = Uint8Array.from(arr);
+    } catch { /* noop */ }
+  }
+  if (!sk) {
+    try {
+      const decoded = bs58.decode(trimmed);
+      if (decoded.length === 64) sk = decoded;
+    } catch { /* noop */ }
+  }
+  if (!sk) throw new Error("Format secret key tidak dikenali. Gunakan base58 (88 char) atau JSON array [..64 angka..].");
+  const kp = Keypair.fromSecretKey(sk);
+  localStorage.setItem(KEY_STORAGE, encodeSecret(sk));
+  return kp;
 }
 
 export function explorerTxUrl(signature: string) {
