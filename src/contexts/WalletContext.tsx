@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { Keypair, PublicKey } from "@solana/web3.js";
 import {
   loadOrCreateKeypair, resetKeypair, getBalanceSol, requestAirdrop,
+  exportSecretKeyBase58, importSecretKey,
 } from "@/lib/solana";
 
 interface WalletState {
@@ -17,6 +18,8 @@ interface WalletState {
   refreshBalance: () => Promise<void>;
   airdrop: () => Promise<string>;
   regenerate: () => void;
+  exportSecret: () => string | null;
+  importSecret: (input: string) => void;
 }
 
 const Ctx = createContext<WalletState | null>(null);
@@ -67,6 +70,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setBalance(null);
   }, []);
 
+  const exportSecret = useCallback(() => exportSecretKeyBase58(), []);
+
+  const importSecret = useCallback((input: string) => {
+    const kp = importSecretKey(input);
+    setKeypair(kp);
+    setBalance(null);
+  }, []);
+
   const value = useMemo<WalletState>(() => ({
     keypair,
     publicKey,
@@ -80,7 +91,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     refreshBalance,
     airdrop,
     regenerate,
-  }), [keypair, publicKey, balance, error, connect, disconnect, refreshBalance, airdrop, regenerate]);
+    exportSecret,
+    importSecret,
+  }), [keypair, publicKey, balance, error, connect, disconnect, refreshBalance, airdrop, regenerate, exportSecret, importSecret]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -1,4 +1,4 @@
-import { Wallet, Loader2, Droplets, RefreshCw, Copy } from "lucide-react";
+import { Wallet, Loader2, Droplets, RefreshCw, Copy, KeyRound, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/contexts/WalletContext";
 import {
@@ -11,7 +11,10 @@ import { toast } from "sonner";
 function shortAddr(a: string) { return `${a.slice(0, 4)}…${a.slice(-4)}`; }
 
 export default function WalletButton({ compact = false }: { compact?: boolean }) {
-  const { connected, connecting, address, balance, connect, airdrop, refreshBalance, regenerate } = useWallet();
+  const {
+    connected, connecting, address, balance,
+    connect, airdrop, refreshBalance, regenerate, exportSecret, importSecret,
+  } = useWallet();
 
   if (!connected) {
     return (
@@ -74,6 +77,31 @@ export default function WalletButton({ compact = false }: { compact?: boolean })
             </a>
           </DropdownMenuItem>
         )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => {
+            const sk = exportSecret();
+            if (!sk) { toast.error("Tidak ada secret key tersimpan"); return; }
+            navigator.clipboard.writeText(sk);
+            toast.success("Secret key (base58) disalin", { description: "Simpan baik-baik — jangan dibagikan!" });
+          }}
+        >
+          <KeyRound className="mr-2 h-4 w-4" /> Export secret key
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            const input = prompt("Paste secret key (base58 atau JSON array 64 angka):");
+            if (!input) return;
+            try {
+              importSecret(input);
+              toast.success("Wallet diimport — refresh saldo");
+            } catch (e: any) {
+              toast.error("Import gagal", { description: e?.message ?? "Format salah" });
+            }
+          }}
+        >
+          <Upload className="mr-2 h-4 w-4" /> Import secret key
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => {
