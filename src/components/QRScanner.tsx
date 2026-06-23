@@ -15,26 +15,35 @@ export default function QRScanner({ onResult }: Props) {
   const [error, setError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const handledRef = useRef(false);
+  const stoppingRef = useRef(false);
 
   async function start() {
     setError(null);
     handledRef.current = false;
+    stoppingRef.current = false;
     setStarting(true);
     try {
-      if (!scannerRef.current) {
-        scannerRef.current = new Html5Qrcode(REGION_ID, {
-          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-          verbose: false,
-        });
+      // Buat ulang instance agar tidak ada state lama tersisa
+      if (scannerRef.current) {
+        try {
+          if (scannerRef.current.isScanning) await scannerRef.current.stop();
+          await scannerRef.current.clear();
+        } catch { /* noop */ }
+        scannerRef.current = null;
       }
+      scannerRef.current = new Html5Qrcode(REGION_ID, {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        verbose: false,
+      });
       await scannerRef.current.start(
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1 },
         (decoded) => {
-          if (handledRef.current) return;
+          // Guard ganda: handledRef mencegah callback ganda, stoppingRef mencegah
+          // callback masuk saat scanner sedang/sudah berhenti
+          if (handledRef.current || stoppingRef.current) return;
           handledRef.current = true;
-          onResult(decoded);
-          stop();
+          stop().then(() => onResult(decoded));
         },
         () => { /* ignore per-frame decode errors */ },
       );
@@ -48,16 +57,19 @@ export default function QRScanner({ onResult }: Props) {
   }
 
   async function stop() {
+    stoppingRef.current = true;
     if (!scannerRef.current) return;
     try {
       if (scannerRef.current.isScanning) await scannerRef.current.stop();
       await scannerRef.current.clear();
     } catch { /* noop */ }
+    scannerRef.current = null;
     setActive(false);
   }
 
   useEffect(() => {
     return () => {
+      stoppingRef.current = true;
       if (scannerRef.current?.isScanning) {
         scannerRef.current.stop().catch(() => {});
       }
