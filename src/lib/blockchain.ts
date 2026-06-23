@@ -246,6 +246,11 @@ export async function verifyProduct(
       });
       items = loadProducts();
       idx = items.findIndex((p) => p.code.toUpperCase() === trimmed);
+      // Pastikan status kembali ke "active" karena ini device baru yang belum pernah scan
+      if (idx !== -1) {
+        items[idx].status = "active";
+        saveProducts(items);
+      }
     } catch { /* already exists or invalid — fall through */ }
   }
 

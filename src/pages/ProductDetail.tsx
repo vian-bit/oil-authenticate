@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ChainBadges, shortHash } from "@/components/ChainBadges";
 import { ProductQR } from "@/components/ProductQR";
 import {
-  getProductByCode, getProductHistory,
+  getProductByCode, getProductHistory, encodePayload,
   type Product, type BlockchainTx,
 } from "@/lib/blockchain";
 import { explorerTxUrl, SOLANA_NETWORK_LABEL } from "@/lib/solana";
@@ -53,7 +53,16 @@ export default function ProductDetail() {
               </div>
               <div className="grid gap-6 p-6 sm:grid-cols-[auto_1fr] sm:items-start">
                 <div className="rounded-xl bg-secondary p-3">
-                  <ProductQR value={`${window.location.origin}/verify/${encodeURIComponent(product.code)}`} size={160} />
+                  {(() => {
+                    const payload = encodePayload({
+                      code: product.code,
+                      name: product.name,
+                      batch: product.batch,
+                      producedAt: product.producedAt,
+                    });
+                    const url = `${window.location.origin}/verify/${encodeURIComponent(product.code)}?d=${payload}`;
+                    return <ProductQR value={url} size={160} />;
+                  })()}
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field k="Batch" v={product.batch} />
